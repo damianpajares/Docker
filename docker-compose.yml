@@ -2,9 +2,6 @@
 # Docker Compose - Configuración Educativa
 # ============================================
 # Este archivo define y configura nuestros contenedores
-
-version: '3.8'
-
 # ============================================
 # SERVICIOS (Contenedores)
 # ============================================
