@@ -1,0 +1,215 @@
+# ============================================
+# Docker Compose - Configuración Educativa
+# ============================================
+# Este archivo define y configura nuestros contenedores
+
+version: '3.8'
+
+# ============================================
+# SERVICIOS (Contenedores)
+# ============================================
+services:
+
+  # ==========================================
+  # SERVICIO 1: PHP + Apache
+  # ==========================================
+  php-apache:
+    # Nombre del contenedor
+    container_name: php-apache-tutorial
+    
+    # Construir desde nuestro Dockerfile
+    build:
+      context: ./docker/php      # Carpeta donde está el Dockerfile
+      dockerfile: Dockerfile      # Nombre del archivo
+    
+    # Puerto mapping: HOST:CONTAINER
+    # Accedes desde tu PC en http://localhost:8080
+    ports:
+      - "8080:80"
+    
+    # VOLÚMENES - Persistencia de datos
+    volumes:
+      # Tipo: Bind Mount
+      # Mapea ./src de tu PC a /var/www/html del contenedor
+      # Cambios en tu PC se reflejan instantáneamente en el contenedor
+      - ./src:/var/www/html:rw    # rw = read-write
+      
+      # Los logs de Apache también se guardan en tu PC
+      - ./logs/apache:/var/log/apache2
+    
+    # VARIABLES DE ENTORNO
+    # Estas variables estarán disponibles dentro del contenedor
+    environment:
+      # Configuración de PHP
+      PHP_MEMORY_LIMIT: 256M
+      PHP_UPLOAD_MAX_FILESIZE: 100M
+      
+      # Configuración de la aplicación
+      APP_ENV: development
+      APP_DEBUG: "true"
+      
+      # Conexión a la base de datos
+      # Nota: 'mysql' es el NOMBRE del otro contenedor
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME}           # Viene del archivo .env
+      DB_USER: ${DB_USER}           # Viene del archivo .env
+      DB_PASSWORD: ${DB_PASSWORD}   # Viene del archivo .env
+    
+    # REDES
+    # Este contenedor se une a la red 'app-network'
+    networks:
+      - app-network
+    
+    # DEPENDS ON
+    # Espera a que MySQL esté listo antes de iniciar
+    depends_on:
+      mysql:
+        condition: service_healthy
+    
+    # HEALTH CHECK
+    # Docker verifica cada 30s si el contenedor está saludable
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # RESTART POLICY
+    # Si el contenedor falla, Docker lo reinicia automáticamente
+    restart: unless-stopped
+
+  # ==========================================
+  # SERVICIO 2: MySQL
+  # ==========================================
+  mysql:
+    # Nombre del contenedor
+    container_name: mysql-tutorial
+    
+    # Imagen oficial de MySQL
+    image: mysql:8.0
+    
+    # Comando para iniciar MySQL
+    # --default-authentication-plugin: Usa método de autenticación compatible
+    command: --default-authentication-plugin=mysql_native_password
+    
+    # Puerto mapping: HOST:CONTAINER
+    # Puedes conectarte desde tu PC en localhost:3306
+    ports:
+      - "3306:3306"
+    
+    # VARIABLES DE ENTORNO
+    # MySQL las usa para configurarse al iniciar
+    environment:
+      # Contraseña del usuario root
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      
+      # Base de datos a crear automáticamente
+      MYSQL_DATABASE: ${DB_NAME}
+      
+      # Usuario adicional a crear
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      
+      # Zona horaria
+      TZ: America/Montevideo
+    
+    # VOLÚMENES
+    volumes:
+      # Named Volume: Docker gestiona dónde guardar los datos
+      # Los datos persisten aunque elimines el contenedor
+      - mysql_data:/var/lib/mysql
+      
+      # Script de inicialización
+      # Se ejecuta la primera vez que se crea la base de datos
+      - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      
+      # Logs
+      - ./logs/mysql:/var/log/mysql
+    
+    # REDES
+    networks:
+      - app-network
+    
+    # HEALTH CHECK
+    # Verifica que MySQL esté listo para aceptar conexiones
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    
+    # RESTART POLICY
+    restart: unless-stopped
+
+# ============================================
+# REDES
+# ============================================
+networks:
+  app-network:
+    # Driver bridge: Red privada entre contenedores
+    driver: bridge
+    
+    # Configuración de IP (opcional)
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+# ============================================
+# VOLÚMENES
+# ============================================
+volumes:
+  # Named volume para MySQL
+  # Docker lo gestiona automáticamente
+  mysql_data:
+    driver: local
+
+# ============================================
+# NOTAS EDUCATIVAS
+# ============================================
+# 
+# 1. SERVICIOS:
+#    - Cada servicio es un contenedor
+#    - Se pueden comunicar usando sus nombres
+#    - Ejemplo: php-apache puede conectarse a 'mysql'
+#
+# 2. VOLÚMENES:
+#    - Bind Mount (./src:/var/www/html):
+#      * Mapea carpeta de tu PC al contenedor
+#      * Cambios son instantáneos
+#      * Útil para desarrollo
+#    
+#    - Named Volume (mysql_data):
+#      * Docker gestiona dónde guardar
+#      * Datos persisten entre reinicios
+#      * Útil para bases de datos
+#
+# 3. PUERTOS:
+#    - Formato: HOST:CONTAINER
+#    - 8080:80 significa:
+#      * 8080: Puerto en tu PC
+#      * 80: Puerto dentro del contenedor
+#
+# 4. REDES:
+#    - Todos los servicios en la misma red pueden comunicarse
+#    - Usan nombres de servicios (no IPs)
+#    - Docker tiene DNS interno
+#
+# 5. VARIABLES DE ENTORNO:
+#    - ${VAR}: Lee del archivo .env
+#    - Se usan para configuración sensible
+#    - No commitear .env a Git
+#
+# 6. HEALTH CHECKS:
+#    - Docker verifica si el contenedor está saludable
+#    - Útil para depends_on con condition
+#
+# 7. RESTART POLICY:
+#    - unless-stopped: Reinicia siempre, excepto si lo detuviste manualmente
+#    - always: Siempre reinicia
+#    - on-failure: Solo si falló
+#    - no: Nunca reinicia
+#
+# ============================================

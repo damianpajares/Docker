@@ -1,0 +1,59 @@
+graph TB
+    subgraph "🖥️ TU COMPUTADORA"
+        Browser["🌐 Navegador Web<br/>http://localhost:8080"]
+        MySQLClient["🔧 Cliente MySQL<br/>localhost:3306"]
+        VSCode["💻 Editor de Código<br/>./src"]
+        
+        subgraph "🐳 DOCKER ENGINE"
+            subgraph "🌉 Red: app-network"
+                
+                subgraph "📦 Contenedor: php-apache"
+                    Apache["Apache Web Server<br/>Puerto: 80"]
+                    PHP["PHP 8.3<br/>(módulo de Apache)"]
+                    Composer["Composer"]
+                end
+                
+                subgraph "📦 Contenedor: mysql"
+                    MySQL["MySQL 8.0<br/>Puerto: 3306"]
+                end
+                
+            end
+            
+            subgraph "💾 VOLÚMENES"
+                SrcVolume["./src<br/>(Bind Mount)"]
+                MySQLVolume["mysql_data<br/>(Named Volume)"]
+                LogsVolume["./logs<br/>(Bind Mount)"]
+            end
+            
+        end
+    end
+    
+    %% Conexiones de Red
+    Browser -->|"HTTP Request<br/>8080:80"| Apache
+    Apache -->|"Ejecuta"| PHP
+    PHP -->|"SQL Query<br/>nombre: mysql"| MySQL
+    MySQLClient -->|"TCP<br/>3306:3306"| MySQL
+    
+    %% Volúmenes
+    VSCode -.->|"Editas código"| SrcVolume
+    SrcVolume -.->|"Montado en<br/>/var/www/html"| PHP
+    MySQL -.->|"Persiste datos"| MySQLVolume
+    PHP -.->|"Escribe logs"| LogsVolume
+    Apache -.->|"Escribe logs"| LogsVolume
+    
+    %% Estilos
+    style Browser fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style MySQLClient fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style VSCode fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    
+    style Apache fill:#4caf50,stroke:#2e7d32,stroke-width:2px,color:#fff
+    style PHP fill:#8e44ad,stroke:#6c3483,stroke-width:2px,color:#fff
+    style Composer fill:#795548,stroke:#5d4037,stroke-width:2px,color:#fff
+    style MySQL fill:#ff9800,stroke:#e65100,stroke-width:2px,color:#fff
+    
+    style SrcVolume fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style MySQLVolume fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+    style LogsVolume fill:#e8f5e9,stroke:#388e3c,stroke-width:2px
+    
+    classDef networkBox fill:#e1f5fe,stroke:#0277bd,stroke-width:3px,stroke-dasharray: 5 5
+    class "🌉 Red: app-network" networkBox
